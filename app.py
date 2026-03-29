@@ -1,25 +1,22 @@
 # =====================================================
-# UMT POLICY CHATBOT - FRONTEND v3.1
-# Runs on Streamlit (locally or Streamlit Cloud)
+# UMT POLICY CHATBOT - FRONTEND v4.0
+# Runs on Streamlit Cloud
 # Install: pip install streamlit requests
-# Run: streamlit run app.py
+# Run locally: streamlit run app.py
 # =====================================================
 
 import streamlit as st
 import requests
-from datetime import datetime
 
 # =====================================================
 # CONFIGURATION
+# Update this URL every time you restart Colab
 # =====================================================
-
-# Paste your ngrok URL from Colab here
-BACKEND_URL = "PASTE_YOUR_NGROK_URL_HERE"
+BACKEND_URL = "https://euphuistical-mollie-nonhazardous.ngrok-free.dev"
 
 # =====================================================
 # PAGE SETUP
 # =====================================================
-
 st.set_page_config(
     page_title="UMT Policy Chatbot",
     page_icon="🎓",
@@ -29,7 +26,6 @@ st.set_page_config(
 # =====================================================
 # STYLING
 # =====================================================
-
 st.markdown("""
     <style>
         .main-header {
@@ -68,7 +64,6 @@ st.markdown("""
 # =====================================================
 # HEADER
 # =====================================================
-
 st.markdown("""
     <div class='main-header'>
         <h1>🎓 UMT Policy Chatbot</h1>
@@ -81,49 +76,13 @@ st.divider()
 # =====================================================
 # SESSION STATE
 # =====================================================
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "backend_url" not in st.session_state:
-    st.session_state.backend_url = BACKEND_URL
-
 # =====================================================
-# SIDEBAR
+# SIDEBAR — Examples and Clear only, no URL input
 # =====================================================
-
 with st.sidebar:
-    st.header("⚙️ Settings")
-
-    # Backend URL input
-    backend_input = st.text_input(
-        "Backend URL (ngrok)",
-        value=st.session_state.backend_url,
-        placeholder="https://xxxx.ngrok.io"
-    )
-    if backend_input:
-        st.session_state.backend_url = backend_input
-
-    # Check backend connection
-    if st.button("🔍 Check Connection"):
-        try:
-            res = requests.get(
-                f"{st.session_state.backend_url}/health",
-                timeout=5
-            )
-            if res.status_code == 200:
-                data = res.json()
-                st.success("✅ Connected!")
-                st.info(f"📚 {data.get('chunks', 0)} chunks loaded")
-                st.info(f"🤖 {data.get('model', 'Unknown')}")
-            else:
-                st.error("❌ Backend returned error")
-        except Exception as e:
-            st.error(f"❌ Cannot connect: {str(e)}")
-
-    st.divider()
-
-    # Example questions
     st.subheader("💡 Example Questions")
     examples = [
         "What is the minimum attendance requirement?",
@@ -134,6 +93,8 @@ with st.sidebar:
         "Can I withdraw from a course?",
         "What is the grading policy?",
         "What is the fee refund policy?",
+        "What is the exam policy?",
+        "How do I apply for a degree certificate?",
     ]
 
     for example in examples:
@@ -142,20 +103,17 @@ with st.sidebar:
 
     st.divider()
 
-    # Clear chat button
     if st.button("🗑️ Clear Chat"):
         st.session_state.messages = []
         st.rerun()
 
     st.divider()
-    st.caption("UMT Policy Chatbot v3.1")
-    st.caption("RAG + flan-t5-large (8-bit)")
-
+    st.caption("UMT Policy Chatbot v4.0")
+    st.caption("Powered by RAG + TinyLlama")
 
 # =====================================================
 # CHAT DISPLAY
 # =====================================================
-
 for msg in st.session_state.messages:
     if msg['role'] == 'user':
         st.markdown(f"""
@@ -170,54 +128,44 @@ for msg in st.session_state.messages:
             </div>
         """, unsafe_allow_html=True)
 
-        if 'sources' in msg and msg['sources']:
-            st.markdown("📚 **Sources:**")
-            for src in msg['sources']:
-                st.markdown(f"""
-                    <span class='source-tag'>{src['sub_category']}</span>
-                    <span class='relevance-tag'>{src['similarity']:.1%} relevance</span>
-                """, unsafe_allow_html=True)
-
-        st.markdown("")
-
+        st.markdown("📚 **Source:** UMT Handbook Undergraduate Studies 2025-2026")
+st.markdown("")
 
 # =====================================================
 # HELPER FUNCTION
 # =====================================================
-
 def ask_question(question):
     """Send question to Colab backend and return answer"""
     try:
         response = requests.post(
-            f"{st.session_state.backend_url}/ask",
+            f"{BACKEND_URL}/ask",
             json={'question': question},
-            timeout=120
+            timeout=120,
+            headers={"ngrok-skip-browser-warning": "true"}
         )
 
         if response.status_code == 200:
             return response.json()
         else:
             return {
-                'answer': f"Backend error: {response.status_code}",
+                'answer': f"⚠️ Backend error: {response.status_code}. Please try again.",
                 'sources': []
             }
 
     except requests.exceptions.Timeout:
         return {
-            'answer': "⚠️ Request timed out. Please try again.",
+            'answer': "⚠️ Request timed out. The model is taking too long. Please try again.",
             'sources': []
         }
     except Exception as e:
         return {
-            'answer': f"⚠️ Connection error: {str(e)}\n\nMake sure your Colab backend is running and the URL is correct.",
+            'answer': "⚠️ The chatbot backend is currently offline. Please try again later.",
             'sources': []
         }
-
 
 # =====================================================
 # CHAT INPUT
 # =====================================================
-
 pending = st.session_state.get("pending_question", None)
 user_input = st.chat_input("Ask about UMT policies...")
 
@@ -227,17 +175,14 @@ if question_to_ask:
     if "pending_question" in st.session_state:
         del st.session_state.pending_question
 
-    # Add user message to history
     st.session_state.messages.append({
         'role': 'user',
         'content': question_to_ask
     })
 
-    # Call backend
     with st.spinner("🔍 Searching policies and generating answer..."):
         result = ask_question(question_to_ask)
 
-    # Add assistant response to history
     st.session_state.messages.append({
         'role': 'assistant',
         'content': result.get('answer', 'No answer returned.'),
@@ -246,20 +191,14 @@ if question_to_ask:
 
     st.rerun()
 
-
 # =====================================================
-# EMPTY STATE MESSAGE
+# EMPTY STATE
 # =====================================================
-
 if not st.session_state.messages:
     st.markdown("""
         <div style='text-align: center; color: gray; padding: 3rem 0;'>
             <h3>👋 Welcome!</h3>
             <p>Ask me anything about UMT undergraduate policies.</p>
             <p>Use the example questions in the sidebar to get started.</p>
-            <br>
-            <p style='font-size: 0.85rem;'>
-                Make sure your Colab backend is running before asking questions.
-            </p>
         </div>
     """, unsafe_allow_html=True)
